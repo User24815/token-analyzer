@@ -12,10 +12,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import requests
 import time
+import os
+from dotenv import load_dotenv  # For local .env file support
+
+# Load environment variables from .env file if it exists (for local testing)
+load_dotenv()
 
 class TokenAnalyzer:
     def __init__(self, telegram_bot_token, telegram_chat_id):
         print("Initializing TokenAnalyzer...")
+        if not telegram_bot_token or not telegram_chat_id:
+            raise ValueError("Telegram bot token or chat ID not provided in environment variables")
         self.bot_token = telegram_bot_token
         self.chat_id = str(telegram_chat_id)
         self.bot_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
@@ -77,6 +84,7 @@ class TokenAnalyzer:
         tokens = []
         driver = None
         try:
+            print(f"Starting scrape from {source_name} at {url}")
             options = Options()
             options.add_argument('--headless=new')
             options.add_argument('--disable-blink-features=AutomationControlled')
@@ -86,18 +94,21 @@ class TokenAnalyzer:
             options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
             driver.get(url)
-            WebDriverWait(driver, 60).until(
+            print(f"Waiting for elements on {source_name}...")
+            WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.CLASS_NAME, 'g-table-row'))
             )
             page_source = driver.page_source
+            soup = BeautifulSoup(page_source, 'html.parser')  # Moved up
+            print(f"Scraped {len(soup.select('.g-table-row'))} rows from {source_name}")
         except Exception as e:
             print(f"{source_name} scrape error: {e}")
             return tokens
         finally:
             if driver:
                 driver.quit()
+                print(f"Closed driver for {source_name}")
 
-        soup = BeautifulSoup(page_source, 'html.parser')
         token_elements = soup.select('.g-table-row[data-row-key^="sol_"]')
         print(f"{source_name} found {len(token_elements)} token elements")
         for token in token_elements[:12]:
@@ -170,7 +181,7 @@ class TokenAnalyzer:
             print(f"Fetching token profile: {url}")
             try:
                 response = requests.get(url, headers=headers)
-                print(f"Raw profile response: {response.text}")
+                print(f"Status code for {address}: {response.status_code}")
                 if response.status_code != 200:
                     print(f"Error fetching profile: {response.status_code} - {response.text}")
                     continue
@@ -207,7 +218,7 @@ class TokenAnalyzer:
             created_timestamp = token.get('pairCreatedAt', 0) // 1000
             age_seconds = current_time - created_timestamp
             
-            print(f"Token: {name}, Market Cap: {market_cap}, Liquidity: {liquidity}, Volume: {volume_24h}, Age: {age_seconds}s, Created: {token.get('pairCreatedAt', 0)}")
+            print(f"Token: {name}, Market Cap: {market_cap}, Liquidity: {liquidity}, Volume: {volume_24h}, Age: {age_seconds}s")
             if (market_cap < 150000 and
                 liquidity >= 11000 and
                 volume_24h >= 100000 and
@@ -260,8 +271,10 @@ class TokenAnalyzer:
         return filtered_tokens
 
 def main():
-    telegram_bot_token = '7153885229:AAFho6grVBCi9vuGNnczNRw5QwSOtERsAd0'
-    telegram_chat_id = '5305709800'
+    telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    if not telegram_bot_token or not telegram_chat_id:
+        raise ValueError("Telegram credentials not provided. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables or in a .env file.")
     analyzer = TokenAnalyzer(telegram_bot_token, telegram_chat_id)
     tokens = analyzer.run_analysis()
     if tokens:
@@ -270,7 +283,8 @@ def main():
             print(f"Name: {token.get('baseToken', {}).get('name', 'Unknown')}, Contract: {token['full_ca']}, Market Cap: ${token.get('marketCap', 0):,.2f}")
 
 if __name__ == "__main__":
-    main()
-
-# Launch command:
-# python C:\Users\fonsw\OneDrive\Desktop\TokenFinder\integrated_token_analyzer.py
+    try:
+        main()
+    except Exception as e:
+        print(f"Script failed: {e}")
+        raise
