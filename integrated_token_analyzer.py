@@ -34,7 +34,8 @@ class TokenAnalyzer:
         }
         self.gmgn_url = "https://gmgn.ai/?chain=sol"
         self.all_tokens = []
-        self.repeat_history_file = "repeat_history.json"
+        # Use GITHUB_WORKSPACE if available, otherwise default to local path
+        self.repeat_history_file = os.path.join(os.getenv('GITHUB_WORKSPACE', ''), 'repeat_history.json')
         self.repeat_history = self.load_repeat_history()
         self.sent_tokens = {}  # Reset for each run
         print("Finished initializing TokenAnalyzer")
