@@ -52,6 +52,7 @@ class TokenAnalyzer:
 
     def save_repeat_history(self):
         """Save repeat history to a JSON file."""
+        print(f"Attempting to save repeat history with content: {self.repeat_history}")
         try:
             with open(self.repeat_history_file, 'w') as f:
                 json.dump(self.repeat_history, f, indent=4)
@@ -63,6 +64,7 @@ class TokenAnalyzer:
         """Update the repeat history for a token."""
         contract_address = token_data['full_ca']
         current_time = int(time.time())
+        print(f"Setting last_seen to current time: {current_time} (UTC: {datetime.utcfromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')})")
         
         if contract_address in self.repeat_history:
             self.repeat_history[contract_address]['count'] += 1
