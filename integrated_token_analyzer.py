@@ -42,12 +42,17 @@ class TokenAnalyzer:
 
     def load_repeat_history(self):
         """Load repeat history from a JSON file."""
+        print(f"Loading repeat history from {self.repeat_history_file}")
         if os.path.exists(self.repeat_history_file):
             try:
                 with open(self.repeat_history_file, 'r') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    print(f"Loaded repeat history: {data}")
+                    return data
             except Exception as e:
                 print(f"Error loading repeat history: {e}")
+        else:
+            print("Repeat history file does not exist, starting with empty dict")
         return {}
 
     def save_repeat_history(self):
@@ -62,26 +67,30 @@ class TokenAnalyzer:
 
     def update_repeat_history(self, token_data):
         """Update the repeat history for a token."""
-        contract_address = token_data['full_ca']
+        contract_address = token_data['full_ca'].lower()
         current_time = int(time.time())
         print(f"Setting last_seen to current time: {current_time} (UTC: {datetime.utcfromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')})")
+        print(f"Processing contract address: {contract_address}")
+        print(f"Current repeat_history keys: {list(self.repeat_history.keys())}")
         
         if contract_address in self.repeat_history:
             self.repeat_history[contract_address]['count'] += 1
             self.repeat_history[contract_address]['last_seen'] = current_time
+            print(f"Incremented count for {contract_address}: {self.repeat_history[contract_address]}")
         else:
             self.repeat_history[contract_address] = {
                 'name': token_data.get('baseToken', {}).get('name', 'Unknown'),
                 'count': 1,
                 'last_seen': current_time
             }
+            print(f"Added new token {contract_address} to repeat history: {self.repeat_history[contract_address]}")
         self.save_repeat_history()
         return self.repeat_history[contract_address]['count'], self.repeat_history[contract_address]['last_seen']
 
     def send_to_telegram(self, token_data):
         try:
             repeat_count, last_seen = self.update_repeat_history(token_data)
-            contract_address = token_data['full_ca']
+            contract_address = token_data['full_ca'].lower()
             
             # Update sent_tokens for tracking
             if contract_address in self.sent_tokens:
@@ -338,7 +347,7 @@ class TokenAnalyzer:
         filtered_tokens = []
         gmgn_ca_set = {token['full_ca'] for token in gmgn_tokens}
         for token in token_profiles:
-            ca = token.get('baseToken', {}).get('address', '')
+            ca = token.get('baseToken', {}).get('address', '').lower()
             if ca not in gmgn_ca_set:
                 continue
             market_cap = token.get('marketCap', 0)
@@ -347,6 +356,7 @@ class TokenAnalyzer:
             name = token.get('baseToken', {}).get('name', '')
             created_timestamp = token.get('pairCreatedAt', 0) // 1000
             age_seconds = current_time - created_timestamp
+            print(f"Token {ca}: Market Cap=${market_cap}, Liquidity=${liquidity}, 24h Volume=${volume_24h}, Age={age_seconds/3600:.2f} hours")
             
             if (market_cap < 150000 and liquidity >= 11000 and volume_24h >= 100000 and 3600 < age_seconds < 2419200):
                 if not token_name or token_name.lower() in name.lower():
@@ -397,6 +407,7 @@ class TokenAnalyzer:
         return filtered_tokens
 
 def main():
+    print(f"Script run started at: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
     telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
     if not telegram_bot_token or not telegram_chat_id:
