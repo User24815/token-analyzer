@@ -29,6 +29,14 @@ jobs:
         run: |
           python integrated_token_analyzer.py
 
+      - name: Check if repeat_history.json exists
+        run: |
+          if [ -f repeat_history.json ]; then
+            echo "File exists: $(cat repeat_history.json)"
+          else
+            echo "File does not exist!"
+          fi
+
       - name: Commit and push repeat_history.json
         run: |
           git config --global user.name "GitHub Action"
