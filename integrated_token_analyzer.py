@@ -20,13 +20,10 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
-print("Loaded environment variables using load_dotenv()")
 
 class TokenAnalyzer:
     def __init__(self, telegram_bot_token, telegram_chat_id):
-        print("Starting TokenAnalyzer initialization...")
-        print(f"Telegram bot token: {'Set' if telegram_bot_token else 'Not set'}")
-        print(f"Telegram chat ID: {'Set' if telegram_chat_id else 'Not set'}")
+        print("Initializing TokenAnalyzer...")
         if not telegram_bot_token or not telegram_chat_id:
             raise ValueError("Telegram bot token or chat ID not provided in environment variables")
         self.bot_token = telegram_bot_token
@@ -38,72 +35,48 @@ class TokenAnalyzer:
         self.gmgn_url = "https://gmgn.ai/?chain=sol"
         self.all_tokens = []
         # Use GITHUB_WORKSPACE if available, otherwise default to local path
-        github_workspace = os.getenv('GITHUB_WORKSPACE', '')
-        print(f"GITHUB_WORKSPACE: {github_workspace}")
-        self.repeat_history_file = os.path.join(github_workspace, 'repeat_history.json')
-        print(f"Repeat history file path: {self.repeat_history_file}")
-        # Create an empty repeat_history.json if it doesn't exist
-        try:
-            if not os.path.exists(self.repeat_history_file):
-                print(f"Creating empty repeat_history.json at {self.repeat_history_file}")
-                with open(self.repeat_history_file, 'w') as f:
-                    json.dump({}, f, indent=4)
-                print("Successfully created empty repeat_history.json")
-            else:
-                print(f"repeat_history.json already exists at {self.repeat_history_file}")
-        except Exception as e:
-            print(f"Failed to create repeat_history.json: {e}")
+        self.repeat_history_file = os.path.join(os.getenv('GITHUB_WORKSPACE', ''), 'repeat_history.json')
         self.repeat_history = self.load_repeat_history()
         self.sent_tokens = {}  # Reset for each run
         print("Finished initializing TokenAnalyzer")
 
     def load_repeat_history(self):
         """Load repeat history from a JSON file."""
-        print(f"Attempting to load repeat history from {self.repeat_history_file}")
         if os.path.exists(self.repeat_history_file):
             try:
                 with open(self.repeat_history_file, 'r') as f:
-                    data = json.load(f)
-                    print(f"Successfully loaded repeat history: {data}")
-                    return data
+                    return json.load(f)
             except Exception as e:
                 print(f"Error loading repeat history: {e}")
-        print("No repeat history file found, starting with empty dictionary")
         return {}
 
     def save_repeat_history(self):
         """Save repeat history to a JSON file."""
-        print(f"Attempting to save repeat history to {self.repeat_history_file}")
         try:
             with open(self.repeat_history_file, 'w') as f:
                 json.dump(self.repeat_history, f, indent=4)
-            print(f"Successfully saved repeat history to {self.repeat_history_file}")
+            print(f"Saved repeat history to {self.repeat_history_file}")
         except Exception as e:
             print(f"Error saving repeat history: {e}")
 
     def update_repeat_history(self, token_data):
         """Update the repeat history for a token."""
-        print("Updating repeat history...")
         contract_address = token_data['full_ca']
         current_time = int(time.time())
-        print(f"Processing token with contract address: {contract_address}")
         
         if contract_address in self.repeat_history:
             self.repeat_history[contract_address]['count'] += 1
             self.repeat_history[contract_address]['last_seen'] = current_time
-            print(f"Incremented count for {contract_address}: {self.repeat_history[contract_address]}")
         else:
             self.repeat_history[contract_address] = {
                 'name': token_data.get('baseToken', {}).get('name', 'Unknown'),
                 'count': 1,
                 'last_seen': current_time
             }
-            print(f"Added new token {contract_address} to repeat history: {self.repeat_history[contract_address]}")
         self.save_repeat_history()
         return self.repeat_history[contract_address]['count'], self.repeat_history[contract_address]['last_seen']
 
     def send_to_telegram(self, token_data):
-        print(f"Sending token to Telegram: {token_data.get('baseToken', {}).get('name', 'Unknown')}")
         try:
             repeat_count, last_seen = self.update_repeat_history(token_data)
             contract_address = token_data['full_ca']
@@ -127,7 +100,7 @@ class TokenAnalyzer:
                 repeat_alert = f"⚠️ Repeat Alert: Seen {repeat_count - 1} time(s) before"
             elif repeat_count == 3:
                 emoji = "🟠"  # Orange for 3 repeaters
-                repeat_alert = f"❗ Repeat Alert: Seen {repeat_count - 1} time(s) before"
+                repeat_alert = f"❗ AERepeat Alert: Seen {repeat_count - 1} time(s) before"
             else:
                 emoji = "🔴"  # Red for 4 or more repeaters
                 repeat_alert = f"🚨 Repeat Alert: Seen {repeat_count - 1} time(s) before"
@@ -189,10 +162,8 @@ class TokenAnalyzer:
 
     def send_repeat_summary(self):
         """Send a summary of all tokens that were repeats in this run, only if multiple tokens are repeats."""
-        print("Checking for repeat summary...")
         repeats = {ca: info for ca, info in self.sent_tokens.items() if info['count'] > 1}
         if len(repeats) <= 1:
-            print("No repeats to summarize")
             return
 
         summary_lines = ["📊 Repeat Summary for This Run"]
@@ -222,7 +193,6 @@ class TokenAnalyzer:
             print(summary_message)
 
     def parse_volume(self, volume_text):
-        print(f"Parsing volume: {volume_text}")
         try:
             cleaned = ''.join(c for c in volume_text if c.isdigit() or c in '.KM')
             if 'K' in cleaned:
@@ -234,7 +204,6 @@ class TokenAnalyzer:
             raise ValueError(f"Cannot parse volume: {volume_text}")
 
     def scrape_source(self, url, source_name, volume_selector, name_selector, ca_selector):
-        print(f"Starting scrape_source for {source_name}...")
         tokens = []
         driver = None
         try:
@@ -304,15 +273,13 @@ class TokenAnalyzer:
         return tokens
 
     def scrape_all(self):
-        print("Starting scrape_all...")
+        print("Scraping tokens...")
         self.all_tokens.extend(self.scrape_source(
             self.gmgn_url, "GMGN", ".css-13rmpsu, .css-1e617o2, .css-15y8kgm, .css-nxsojn", ".css-9enbzl", ".css-vps9hc"
         ))
-        print(f"Finished scrape_all, collected {len(self.all_tokens)} tokens")
         return self.all_tokens
 
     def get_dexscreener_pairs(self, chain, pair_addresses):
-        print("Starting get_dexscreener_pairs...")
         all_pairs = []
         headers = {"User-Agent": "Mozilla/5.0 (compatible; TokenFilterBot/1.0)"}
         for pair in pair_addresses:
@@ -335,11 +302,9 @@ class TokenAnalyzer:
                 print(f"Request failed for {pair}: {e}")
             except ValueError as e:
                 print(f"JSON decode error for {pair}: {e} - Response: {response.text}")
-        print(f"Finished get_dexscreener_pairs, collected {len(all_pairs)} pairs")
         return all_pairs
 
     def get_token_profiles(self, chain_id, token_addresses):
-        print("Starting get_token_profiles...")
         all_profiles = []
         headers = {"User-Agent": "Mozilla/5.0 (compatible; TokenFilterBot/1.0)"}
         for address in token_addresses:
@@ -364,11 +329,9 @@ class TokenAnalyzer:
                 print(f"Request failed: {e}")
             except ValueError as e:
                 print(f"JSON decode error: {e} - Response: {response.text}")
-        print(f"Finished get_token_profiles, collected {len(all_profiles)} profiles")
         return all_profiles
 
     def filter_tokens(self, token_profiles, gmgn_tokens, token_name=""):
-        print("Starting filter_tokens...")
         current_time = int(time.time())
         filtered_tokens = []
         gmgn_ca_set = {token['full_ca'] for token in gmgn_tokens}
@@ -388,11 +351,9 @@ class TokenAnalyzer:
                     token['full_ca'] = ca
                     filtered_tokens.append(token)
                     self.send_to_telegram(token)
-        print(f"Finished filter_tokens, found {len(filtered_tokens)} tokens")
         return filtered_tokens
 
     def run_analysis(self):
-        print("Starting run_analysis...")
         print("Running gmgn.ai scrape...")
         gmgn_tokens = self.scrape_all()
         if not gmgn_tokens:
@@ -434,11 +395,8 @@ class TokenAnalyzer:
         return filtered_tokens
 
 def main():
-    print("Starting main()...")
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
     telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
-    print(f"Retrieved TELEGRAM_BOT_TOKEN: {'Set' if telegram_bot_token else 'Not set'}")
-    print(f"Retrieved TELEGRAM_CHAT_ID: {'Set' if telegram_chat_id else 'Not set'}")
     if not telegram_bot_token or not telegram_chat_id:
         raise ValueError("Telegram credentials not provided. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables or in a .env file.")
     analyzer = TokenAnalyzer(telegram_bot_token, telegram_chat_id)
@@ -447,13 +405,10 @@ def main():
         print("\nTokens Found:")
         for token in tokens:
             print(f"Name: {token.get('baseToken', {}).get('name', 'Unknown')}, Contract: {token['full_ca']}, Market Cap: ${token.get('marketCap', 0):,.2f}")
-    print("Finished main()")
 
 if __name__ == "__main__":
-    print("Script execution started...")
     try:
         main()
     except Exception as e:
         print(f"Script failed: {e}")
         raise
-    print("Script execution completed")
