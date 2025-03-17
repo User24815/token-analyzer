@@ -20,10 +20,13 @@ import json
 from dotenv import load_dotenv
 
 load_dotenv()
+print("Loaded environment variables using load_dotenv()")
 
 class TokenAnalyzer:
     def __init__(self, telegram_bot_token, telegram_chat_id):
         print("Initializing TokenAnalyzer...")
+        print(f"Telegram bot token: {'Set' if telegram_bot_token else 'Not set'}")
+        print(f"Telegram chat ID: {'Set' if telegram_chat_id else 'Not set'}")
         if not telegram_bot_token or not telegram_chat_id:
             raise ValueError("Telegram bot token or chat ID not provided in environment variables")
         self.bot_token = telegram_bot_token
@@ -35,12 +38,17 @@ class TokenAnalyzer:
         self.gmgn_url = "https://gmgn.ai/?chain=sol"
         self.all_tokens = []
         # Use GITHUB_WORKSPACE if available, otherwise default to local path
-        self.repeat_history_file = os.path.join(os.getenv('GITHUB_WORKSPACE', ''), 'repeat_history.json')
+        github_workspace = os.getenv('GITHUB_WORKSPACE', '')
+        print(f"GITHUB_WORKSPACE: {github_workspace}")
+        self.repeat_history_file = os.path.join(github_workspace, 'repeat_history.json')
+        print(f"Repeat history file path: {self.repeat_history_file}")
         # Create an empty repeat_history.json if it doesn't exist
         if not os.path.exists(self.repeat_history_file):
             print(f"Creating empty repeat_history.json at {self.repeat_history_file}")
             with open(self.repeat_history_file, 'w') as f:
                 json.dump({}, f, indent=4)
+        else:
+            print(f"repeat_history.json already exists at {self.repeat_history_file}")
         self.repeat_history = self.load_repeat_history()
         self.sent_tokens = {}  # Reset for each run
         print("Finished initializing TokenAnalyzer")
@@ -158,58 +166,4 @@ class TokenAnalyzer:
                 f"{repeat_alert}\n" if repeat_alert else ""
                 f"Contract: <code>{token_data.get('full_ca', 'Unknown')}</code>\n"
                 f"Name: <b>{token_data.get('baseToken', {}).get('name', 'Unknown')}</b>\n"
-                f"Market Cap: ${token_data.get('marketCap', 0):,.2f}\n"
-                f"Liquidity: ${token_data.get('liquidity', {}).get('usd', 0):,.2f}\n"
-                f"24h Volume: ${token_data.get('volume', {}).get('h24', 0):,.2f}\n"
-                f"Age: {(int(time.time()) - token_data.get('pairCreatedAt', 0) // 1000) / 3600:.2f} hours\n"
-            )
-            print(message)
-
-    def send_repeat_summary(self):
-        """Send a summary of all tokens that were repeats in this run, only if multiple tokens are repeats."""
-        repeats = {ca: info for ca, info in self.sent_tokens.items() if info['count'] > 1}
-        if len(repeats) <= 1:
-            return
-
-        summary_lines = ["📊 Repeat Summary for This Run"]
-        for ca, info in repeats.items():
-            repeat_count = info['count']
-            emoji = "🟡" if repeat_count == 2 else "🟠" if repeat_count == 3 else "🔴"
-            summary_lines.append(f"{emoji} {info['name']} ({info['short_ca']}) - Seen {repeat_count} times")
-        
-        summary_message = "\n".join(summary_lines)
-        payload = {
-            'chat_id': self.chat_id,
-            'text': summary_message,
-            'parse_mode': 'HTML'
-        }
-        try:
-            with httpx.Client() as client:
-                response = client.post(self.bot_url, data=payload)
-            if response.status_code == 200:
-                print("✅ Sent repeat summary to Telegram")
-            else:
-                print(f"❌ Repeat summary send failed: {response.status_code} - {response.text}")
-                print("Falling back to console output:")
-                print(summary_message)
-        except Exception as e:
-            print(f"❌ Repeat summary error: {e}")
-            print("Falling back to console output:")
-            print(summary_message)
-
-    def parse_volume(self, volume_text):
-        try:
-            cleaned = ''.join(c for c in volume_text if c.isdigit() or c in '.KM')
-            if 'K' in cleaned:
-                return float(cleaned.replace('K', '')) * 1000
-            elif 'M' in cleaned:
-                return float(cleaned.replace('M', '')) * 1000000
-            return float(cleaned)
-        except ValueError:
-            raise ValueError(f"Cannot parse volume: {volume_text}")
-
-    def scrape_source(self, url, source_name, volume_selector, name_selector, ca_selector):
-        tokens = []
-        driver = None
-        try:
-...
+                f"Market Cap: ${token_data.get('marketCap',
