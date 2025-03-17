@@ -1,10 +1,9 @@
 name: Token Analyzer Workflow
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'  # Runs every hour
+  workflow_dispatch:    # Lets you run it manually too
 
 jobs:
   analyze-tokens:
@@ -29,3 +28,13 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python integrated_token_analyzer.py
+
+      - name: Commit and push repeat_history.json
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add repeat_history.json
+          git commit -m "Update repeat_history.json" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
