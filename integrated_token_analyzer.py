@@ -55,6 +55,7 @@ class TokenAnalyzer:
         try:
             with open(self.repeat_history_file, 'w') as f:
                 json.dump(self.repeat_history, f, indent=4)
+            print(f"Saved repeat history to {self.repeat_history_file}")
         except Exception as e:
             print(f"Error saving repeat history: {e}")
 
