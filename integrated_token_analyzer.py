@@ -12,6 +12,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException  # Added for timeout handling
 from webdriver_manager.chrome import ChromeDriverManager
 import requests
 import time
@@ -208,7 +209,7 @@ class TokenAnalyzer:
             options.add_experimental_option('useAutomationExtension', False)
 
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-            driver.set_page_load_timeout(60)  # Set a 60-second timeout for page load
+            driver.set_page_load_timeout(60)  # 60-second timeout for page load
             driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
                 'source': '''
                     Object.defineProperty(navigator, 'webdriver', {
@@ -217,20 +218,22 @@ class TokenAnalyzer:
                 '''
             })
 
+            print(f"Navigating to {url}...")
             driver.get(url)
             print(f"Waiting for elements on {source_name}...")
             WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CLASS_NAME, 'g-table-row')))
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             print(f"Scraped {len(soup.select('.g-table-row'))} rows from {source_name}")
+        except TimeoutException as e:
+            print(f"{source_name} scrape timeout: {e}")
         except Exception as e:
-            print(f"{source_name} scrape error: {e}")
-            return tokens
+            print(f"{source_name} scrape error: {str(e)}")
         finally:
             if driver:
                 driver.quit()
                 print(f"Closed driver for {source_name}")
 
-        token_elements = soup.select('.g-table-row[data-row-key^="sol_"]')
+        token_elements = soup.select('.g-table-row[data-row-key^="sol_"]') if 'soup' in locals() else []
         print(f"{source_name} found {len(token_elements)} token elements")
         for token in token_elements[:20]:
             row_key = token.get('data-row-key', '')
