@@ -43,6 +43,7 @@ jobs:
           git config --global user.email "action@github.com"
           git add repeat_history.json
           git commit -m "Update repeat_history.json" || echo "No changes to commit"
+          git pull --rebase  # Pull latest changes before pushing
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
