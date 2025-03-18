@@ -2,7 +2,7 @@ name: Token Analyzer Workflow
 
 on:
   schedule:
-    - cron: '15,45 * * * *'  # Runs at the 15th and 45th minute of each hour (e.g., 01:15, 01:45, 02:15, 02:45)
+    - cron: '15,45 * * * *'  # Runs at the 15th and 45th minute of each hour (e.g., 14:15, 14:45, 15:15 UTC)
   workflow_dispatch:    # Lets you run it manually too
 
 jobs:
@@ -27,6 +27,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          echo "Starting token analysis"
           python integrated_token_analyzer.py
 
       - name: Check if repeat_history.json exists
