@@ -34,7 +34,6 @@ class TokenAnalyzer:
         }
         self.gmgn_url = "https://gmgn.ai/?chain=sol"
         self.all_tokens = []
-        # Use GITHUB_WORKSPACE if available, otherwise default to local path
         self.repeat_history_file = os.path.join(os.getenv('GITHUB_WORKSPACE', ''), 'repeat_history.json')
         self.repeat_history = self.load_repeat_history()
         self.sent_tokens = {}  # Reset for each run
@@ -57,7 +56,7 @@ class TokenAnalyzer:
 
     def save_repeat_history(self):
         """Save repeat history to a JSON file."""
-        print(f"Attempting to save repeat history with content: {self.repeat_history}")
+        print(f"Saving repeat history: {self.repeat_history}")
         try:
             with open(self.repeat_history_file, 'w') as f:
                 json.dump(self.repeat_history, f, indent=4)
@@ -71,7 +70,6 @@ class TokenAnalyzer:
         current_time = int(time.time())
         print(f"Setting last_seen to current time: {current_time} (UTC: {datetime.utcfromtimestamp(current_time).strftime('%Y-%m-%d %H:%M:%S')})")
         print(f"Processing contract address: {contract_address}")
-        print(f"Current repeat_history keys: {list(self.repeat_history.keys())}")
         
         if contract_address in self.repeat_history:
             self.repeat_history[contract_address]['count'] += 1
@@ -92,7 +90,6 @@ class TokenAnalyzer:
             repeat_count, last_seen = self.update_repeat_history(token_data)
             contract_address = token_data['full_ca'].lower()
             
-            # Update sent_tokens for tracking
             if contract_address in self.sent_tokens:
                 self.sent_tokens[contract_address]['count'] += 1
             else:
@@ -102,18 +99,17 @@ class TokenAnalyzer:
                     'short_ca': contract_address[:6] + '...' + contract_address[-3:]
                 }
             
-            # Determine emoji and repeat alert
             if repeat_count == 1:
                 emoji = "🟢"
                 repeat_alert = ""
             elif repeat_count == 2:
-                emoji = "🟡"  # Yellow for 2 repeaters
+                emoji = "🟡"
                 repeat_alert = f"⚠️ Repeat Alert: Seen {repeat_count - 1} time(s) before"
             elif repeat_count == 3:
-                emoji = "🟠"  # Orange for 3 repeaters
-                repeat_alert = f"❗ AERepeat Alert: Seen {repeat_count - 1} time(s) before"
+                emoji = "🟠"
+                repeat_alert = f"❗ Repeat Alert: Seen {repeat_count - 1} time(s) before"
             else:
-                emoji = "🔴"  # Red for 4 or more repeaters
+                emoji = "🔴"
                 repeat_alert = f"🚨 Repeat Alert: Seen {repeat_count - 1} time(s) before"
             
             if repeat_count > 1:
@@ -125,7 +121,6 @@ class TokenAnalyzer:
                 else:
                     repeat_alert += f" (last seen {minutes_ago} minute{'s' if minutes_ago != 1 else ''} ago)"
 
-            # Construct the message
             message_lines = []
             message_lines.append(f"{emoji} 🚀 Filtered Token! #{repeat_count}")
             if repeat_alert:
@@ -141,7 +136,6 @@ class TokenAnalyzer:
 
             message = "\n".join(message_lines)
 
-            # Prepare the payload (no reply_markup since removing Copy CA button)
             payload = {
                 'chat_id': self.chat_id,
                 'text': message,
@@ -151,28 +145,15 @@ class TokenAnalyzer:
             with httpx.Client() as client:
                 response = client.post(self.bot_url, data=payload)
             if response.status_code == 200:
-                print(f"✅ Sent {token_data['full_ca'][:6]}...{token_data['full_ca'][-3:]} to Telegram")
+                print(f"✅ Sent {token_data['full_ca'][:6]}... to Telegram")
             else:
                 print(f"❌ Telegram send failed: {response.status_code} - {response.text}")
-                print("Falling back to console output:")
-                print(message)
+                print("Console output:", message)
         except Exception as e:
             print(f"❌ Telegram error: {e}")
-            print("Falling back to console output:")
-            message = (
-                f"{emoji} 🚀 Filtered Token! #{repeat_count}\n"
-                f"{repeat_alert}\n" if repeat_alert else ""
-                f"Contract: <code>{token_data.get('full_ca', 'Unknown')}</code>\n"
-                f"Name: <b>{token_data.get('baseToken', {}).get('name', 'Unknown')}</b>\n"
-                f"Market Cap: ${token_data.get('marketCap', 0):,.2f}\n"
-                f"Liquidity: ${token_data.get('liquidity', {}).get('usd', 0):,.2f}\n"
-                f"24h Volume: ${token_data.get('volume', {}).get('h24', 0):,.2f}\n"
-                f"Age: {(int(time.time()) - token_data.get('pairCreatedAt', 0) // 1000) / 3600:.2f} hours\n"
-            )
-            print(message)
+            print("Console output:", message)
 
     def send_repeat_summary(self):
-        """Send a summary of all tokens that were repeats in this run, only if multiple tokens are repeats."""
         repeats = {ca: info for ca, info in self.sent_tokens.items() if info['count'] > 1}
         if len(repeats) <= 1:
             return
@@ -196,12 +177,8 @@ class TokenAnalyzer:
                 print("✅ Sent repeat summary to Telegram")
             else:
                 print(f"❌ Repeat summary send failed: {response.status_code} - {response.text}")
-                print("Falling back to console output:")
-                print(summary_message)
         except Exception as e:
             print(f"❌ Repeat summary error: {e}")
-            print("Falling back to console output:")
-            print(summary_message)
 
     def parse_volume(self, volume_text):
         try:
@@ -231,6 +208,7 @@ class TokenAnalyzer:
             options.add_experimental_option('useAutomationExtension', False)
 
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            driver.set_page_load_timeout(60)  # Set a 60-second timeout for page load
             driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
                 'source': '''
                     Object.defineProperty(navigator, 'webdriver', {
@@ -261,7 +239,7 @@ class TokenAnalyzer:
             full_ca = link_elem['href'].split('/')[-1] if link_elem else row_ca
             ca_elem = token.select_one(ca_selector)
             ca_display = ca_elem.text.strip() if ca_elem else ''
-            print(f"Found CA from {source_name}: {ca_display[:6]}...{ca_display[-3:]} (Full: {full_ca})")
+            print(f"Found CA: {ca_display[:6]}... (Full: {full_ca})")
             if full_ca:
                 name_elem = token.select_one(name_selector) or token.select_one('.css-b9ade')
                 volume_elem = token.select_one(volume_selector)
@@ -278,9 +256,9 @@ class TokenAnalyzer:
                         }
                         tokens.append(token_data)
                     except ValueError as e:
-                        print(f"Invalid volume format for {full_ca[:6]}...{full_ca[-3:]}: {volume_text}")
+                        print(f"Invalid volume format for {full_ca[:6]}...: {volume_text}")
                 else:
-                    print(f"Missing data for {full_ca[:6]}...{full_ca[-3:]} in {source_name}")
+                    print(f"Missing data for {full_ca[:6]}...")
         return tokens
 
     def scrape_all(self):
@@ -401,9 +379,6 @@ class TokenAnalyzer:
         print(f"Filtered tokens count: {len(filtered_tokens)}")
         
         self.send_repeat_summary()
-
-        if not filtered_tokens:
-            print("No tokens met all criteria.")
         return filtered_tokens
 
 def main():
@@ -411,7 +386,7 @@ def main():
     telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
     telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
     if not telegram_bot_token or not telegram_chat_id:
-        raise ValueError("Telegram credentials not provided. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as environment variables or in a .env file.")
+        raise ValueError("Telegram credentials not provided. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in environment variables or .env file.")
     analyzer = TokenAnalyzer(telegram_bot_token, telegram_chat_id)
     tokens = analyzer.run_analysis()
     if tokens:
