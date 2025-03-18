@@ -2,7 +2,7 @@ name: Token Analyzer Workflow
 
 on:
   schedule:
-    - cron: '0,30 * * * *'  # Runs every 30 minutes (e.g., 12:00, 12:30, 1:00, 1:30)
+    - cron: '*/30 * * * *'  # Runs every 30 minutes (e.g., 01:00, 01:30, 02:00, 02:30)
   workflow_dispatch:    # Lets you run it manually too
 
 jobs:
@@ -28,7 +28,6 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python integrated_token_analyzer.py
-        # Added comment to force a new run and reset schedule
 
       - name: Check if repeat_history.json exists
         run: |
@@ -44,6 +43,7 @@ jobs:
           git config --global user.email "action@github.com"
           git add repeat_history.json
           git commit -m "Update repeat_history.json" || echo "No changes to commit"
+          git pull --rebase  # Pull latest changes to avoid conflicts
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
